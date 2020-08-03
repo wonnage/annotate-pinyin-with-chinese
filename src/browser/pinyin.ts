@@ -3,6 +3,9 @@
     if (message.request === 'refresh') {
       refresh();
     }
+    if (message.request === 'cleanup') {
+      cleanup();
+    }
   });
   const [CHINESE_CODE_POINT_START, CHINESE_CODE_POINT_END] = [0x4e00, 0x9fff];
   document.addEventListener('selectionchange', () => {
@@ -84,6 +87,7 @@
     while (node) {
       if (
         node.parentNode!.nodeName !== 'RUBY' &&
+        node.parentNode!.nodeName !== 'TITLE' &&
         node.parentNode!.nodeName !== 'SCRIPT'
       ) {
         if (hasChinese(node.nodeValue!)) {
@@ -128,7 +132,7 @@
     console.timeEnd('annotateTextNodesWithPinyin');
   };
 
-  const refresh = async () => {
+  const cleanup = () => {
     const parents = new Set(
       Array.from(document.querySelectorAll('ruby.pinyin-extension')).map(
         c => c.parentNode!
@@ -145,7 +149,10 @@
       });
       parent.normalize();
     });
+  };
 
+  const refresh = async () => {
+    cleanup();
     const textNodes = getTextNodesFromSelection(window.getSelection()!);
     const characters = getCharactersFromTextNodes(textNodes);
 

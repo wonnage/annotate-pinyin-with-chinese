@@ -23,6 +23,9 @@
     ],
     "persistent": true
   },
+  "options_ui": {
+    "page": "src/browser/options.html"
+  },
   "permissions": [
     "contextMenus",
     "tabs",

@@ -1,15 +1,16 @@
 let characterPinyinCache: {[key: string]: string} = {};
 const characterLevelsCache: {[key: string]: number} = {};
+let enabled: boolean | undefined;
 
 function buildOnclickHandler(isRemove: boolean) {
   return function onclick(info: chrome.contextMenus.OnClickData) {
-    chrome.storage.local.get('pinyin', items => {
-      const existingItems = new Set(items.pinyin || []);
+    chrome.storage.local.get('whitelist', items => {
+      const existingItems = new Set(items.whitelist || []);
       const words = info.selectionText?.split('') || [];
       words.forEach(w =>
         isRemove ? existingItems.delete(w) : existingItems.add(w)
       );
-      chrome.storage.local.set({pinyin: Array.from(existingItems)});
+      chrome.storage.local.set({whitelist: Array.from(existingItems)});
       chrome.tabs.query({active: true, currentWindow: true}, tabs => {
         chrome.tabs.sendMessage(tabs[0]!.id!, {request: 'refresh'});
       });
@@ -24,6 +25,16 @@ const setupContextMenu = async () => {
       contexts: ['selection'],
       async onclick(info, tab) {
         executePinyinScript(tab.id!);
+      },
+    });
+    chrome.contextMenus.create({
+      id: 'disableAnnotations',
+      title: 'Disable annotations',
+      contexts: ['browser_action'],
+      visible: false,
+      async onclick(info, tab) {
+        chrome.tabs.sendMessage(tab.id!, {request: 'cleanup'});
+        chrome.contextMenus.update('disableAnnotations', {visible: false});
       },
     });
     chrome.contextMenus.create({
@@ -60,12 +71,13 @@ const executePinyinScript = (tabId: number) => {
 
 const fetchCharactersMapping = (
   characters: string[],
+  filterLevel: number | undefined,
   whitelist: Set<string>
 ): {[key: string]: string} => {
   const out: {[key: string]: string} = {};
   for (const char of characters) {
     const level: number | undefined = characterLevelsCache[char];
-    if (!whitelist.has(char) && level && level < 4) {
+    if (!whitelist.has(char) && level && filterLevel && level < filterLevel) {
       continue;
     }
     out[char] = characterPinyinCache[char];
@@ -79,6 +91,8 @@ chrome.runtime.onInstalled.addListener(() => {
 
   chrome.browserAction.onClicked.addListener(tab => {
     executePinyinScript(tab.id!);
+    enabled = true;
+    chrome.contextMenus.update('disableAnnotations', {visible: true});
   });
 });
 
@@ -86,15 +100,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.request === 'lookup') {
     const {characters} = message as {characters: string[]};
     console.log(characters.length);
-    chrome.storage.local.get('pinyin', items => {
-      const whitelist = new Set<string>(items?.pinyin || []);
+    chrome.storage.local.get(['hsk', 'whitelist'], items => {
+      const whitelist = new Set<string>(items?.whitelist || []);
+      const level = items?.hsk
+        ? parseInt(items.hsk, 10) || undefined
+        : undefined;
       console.log('whitelist is', whitelist);
-      sendResponse(fetchCharactersMapping(characters, whitelist));
+      sendResponse(fetchCharactersMapping(characters, level, whitelist));
     });
     return true;
   } else if (message.request === 'updateContextMenu') {
-    chrome.storage.local.get('pinyin', items => {
-      const existingItems = new Set(items.pinyin || []);
+    chrome.storage.local.get('whitelist', items => {
+      const existingItems = new Set(items.whitelist || []);
       if (
         message.selection
           .toString()

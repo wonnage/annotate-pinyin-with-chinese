@@ -7,7 +7,7 @@
     "check": "gts check",
     "clean": "gts clean",
     "build": "npm run compile && npm run unihan:build && npm run build:copy",
-    "build:copy": "cp -r manifest.json README.md icons ./build",
+    "build:copy": "cp -r manifest.json README.md icons ./build && cp src/browser/hsk.json build/src/browser/hsk.json && cp src/browser/options.html build/src/browser/options.html",
     "build:zip": "rm -f ./build.zip && (cd ./build && zip -r ../build.zip .)",
     "compile": "tsc",
     "fix": "gts fix",
@@ -22,9 +22,11 @@
   "author": "Haochi Chen",
   "license": "ISC",
   "devDependencies": {
-    "@types/chrome": "0.0.104",
     "@types/node": "^10.0.3",
     "gts": "^2.0.0",
     "typescript": "~3.8.0"
+  },
+  "dependencies": {
+    "@types/chrome": "^0.0.122"
   }
 }

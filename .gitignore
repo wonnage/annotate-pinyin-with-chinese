@@ -1,5 +1,8 @@
 node_modules
-build
+build/*
 build.zip
 cache
 !cache/.keep
+*.swp
+.DS_Store
+yarn.lock

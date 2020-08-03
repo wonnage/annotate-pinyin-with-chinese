@@ -1,5 +1,19 @@
 (() => {
+  chrome.runtime.onMessage.addListener(message => {
+    if (message.request === 'refresh') {
+      refresh();
+    }
+  });
   const [CHINESE_CODE_POINT_START, CHINESE_CODE_POINT_END] = [0x4e00, 0x9fff];
+  document.addEventListener('selectionchange', () => {
+    const selection = window.getSelection()?.toString().trim();
+    if (selection) {
+      chrome.runtime.sendMessage({
+        request: 'updateContextMenu',
+        selection: selection,
+      });
+    }
+  });
 
   const sendBackgroundMessage = (payload: {
     [key: string]: unknown;
@@ -37,18 +51,13 @@
 
   const createRubyNode = (character: string, pinyin: string) => {
     const ruby = document.createElement('ruby');
-    const leftRP = document.createElement('rp');
-    const rightRP = document.createElement('rp');
-    const rt = document.createElement('rt');
     const characterNode = document.createTextNode(character);
-    leftRP.textContent = '(';
-    rightRP.textContent = ')';
+    const rt = document.createElement('rt');
+    ruby.className = 'pinyin-extension';
     rt.textContent = pinyin;
     rt.style.userSelect = 'none';
     ruby.appendChild(characterNode);
-    ruby.appendChild(leftRP);
     ruby.appendChild(rt);
-    ruby.appendChild(rightRP);
     return ruby;
   };
 
@@ -119,16 +128,35 @@
     console.timeEnd('annotateTextNodesWithPinyin');
   };
 
-  (async () => {
+  const refresh = async () => {
+    const parents = new Set(
+      Array.from(document.querySelectorAll('ruby.pinyin-extension')).map(
+        c => c.parentNode!
+      )
+    );
+    parents.forEach(parent => {
+      const rubies = parent.querySelectorAll('ruby.pinyin-extension');
+      rubies.forEach(e => {
+        const originalText = Array.from(e.childNodes)
+          .filter(n => n.nodeName === '#text')
+          .map(n => n.textContent)
+          .join('');
+        e.replaceWith(document.createTextNode(originalText));
+      });
+      parent.normalize();
+    });
+
     const textNodes = getTextNodesFromSelection(window.getSelection()!);
     const characters = getCharactersFromTextNodes(textNodes);
 
     const characterToPinyinMap = (await sendBackgroundMessage({
+      request: 'lookup',
       characters: Array.from(characters),
     })) as {
       [key: string]: string;
     };
 
     annotateTextNodesWithPinyin(textNodes, characterToPinyinMap);
-  })();
+  };
+  refresh();
 })();

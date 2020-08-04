@@ -52,15 +52,35 @@
     return false;
   };
 
-  const createRubyNode = (character: string, pinyin: string) => {
+  function needsPinyin(char: string, lookup: {[key: string]: string}) {
+    return !!(isChinese(char) && lookup[char]);
+  }
+
+  const createRubyNode = (text: string, lookup: {[key: string]: string}) => {
     const ruby = document.createElement('ruby');
-    const characterNode = document.createTextNode(character);
-    const rt = document.createElement('rt');
     ruby.className = 'pinyin-extension';
-    rt.textContent = pinyin;
-    rt.style.userSelect = 'none';
-    ruby.appendChild(characterNode);
-    ruby.appendChild(rt);
+    const rts = [];
+    let remaining = Array.from(text);
+    while (remaining.length > 0) {
+      const shouldShow = needsPinyin(remaining[0], lookup);
+      const stop = remaining.findIndex(
+        c => needsPinyin(c, lookup) !== shouldShow
+      );
+      const substr = stop === -1 ? remaining : remaining.slice(0, stop);
+      const rb = document.createElement('rb');
+      rb.textContent = substr.join('');
+      ruby.appendChild(rb);
+      if (!shouldShow) {
+        rts.push(document.createElement('rt'));
+      } else {
+        const rt = document.createElement('rt');
+        rt.textContent = substr.map(char => lookup[char]).join(' ');
+        rts.push(rt);
+      }
+      remaining = stop === -1 ? [] : remaining.slice(stop, remaining.length);
+    }
+
+    ruby.append(...rts);
     return ruby;
   };
 
@@ -117,17 +137,11 @@
   ) => {
     console.time('annotateTextNodesWithPinyin');
     for (const node of textNodes) {
-      const fragment = document.createDocumentFragment();
-      for (const character of node.nodeValue!) {
-        if (character in characterToPinyinMap) {
-          fragment.appendChild(
-            createRubyNode(character, characterToPinyinMap[character])
-          );
-        } else {
-          fragment.appendChild(document.createTextNode(character));
-        }
+      const ruby = createRubyNode(node.nodeValue!, characterToPinyinMap);
+      node.parentElement!.replaceChild(ruby, node);
+      if (ruby.parentElement) {
+        ruby.parentElement.style.overflow = 'visible';
       }
-      node.parentElement?.replaceChild(fragment, node);
     }
     console.timeEnd('annotateTextNodesWithPinyin');
   };
@@ -142,7 +156,7 @@
       const rubies = parent.querySelectorAll('ruby.pinyin-extension');
       rubies.forEach(e => {
         const originalText = Array.from(e.childNodes)
-          .filter(n => n.nodeName === '#text')
+          .filter(n => n.nodeName === 'RB')
           .map(n => n.textContent)
           .join('');
         e.replaceWith(document.createTextNode(originalText));

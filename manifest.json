@@ -20,8 +20,7 @@
   "background": {
     "scripts": [
       "src/browser/background.js"
-    ],
-    "persistent": true
+    ]
   },
   "options_ui": {
     "page": "src/browser/options.html"
@@ -31,5 +30,10 @@
     "tabs",
     "storage",
     "activeTab"
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "thisisatestid1234234234234@example.com"
+    }
+  }
 }

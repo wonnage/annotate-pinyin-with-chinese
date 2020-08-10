@@ -86,14 +86,15 @@ const fetchCharactersMapping = (
   return out;
 };
 
-chrome.runtime.onInstalled.addListener(() => {
-  setupContextMenu();
+console.log('chrome is', chrome.runtime);
 
-  chrome.browserAction.onClicked.addListener(tab => {
-    executePinyinScript(tab.id!);
-    enabled = true;
-    chrome.contextMenus.update('disableAnnotations', {visible: true});
-  });
+setupContextMenu();
+
+chrome.browserAction.onClicked.addListener(tab => {
+  console.log('clicked');
+  executePinyinScript(tab.id!);
+  enabled = true;
+  chrome.contextMenus.update('disableAnnotations', {visible: true});
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -133,3 +134,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return;
 });
+console.log('finish init');

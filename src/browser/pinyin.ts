@@ -56,7 +56,37 @@
     return !!(isChinese(char) && lookup[char]);
   }
 
-  const createRubyNode = (text: string, lookup: {[key: string]: string}) => {
+  const createRubyNodeInterspersed = (
+    text: string,
+    lookup: {[key: string]: string}
+  ) => {
+    const ruby = document.createElement('ruby');
+    ruby.className = 'pinyin-extension';
+    let remaining = Array.from(text);
+    while (remaining.length > 0) {
+      const shouldShow = needsPinyin(remaining[0], lookup);
+      const stop = remaining.findIndex(
+        c => needsPinyin(c, lookup) !== shouldShow
+      );
+      const substr = stop === -1 ? remaining : remaining.slice(0, stop);
+      const rb = document.createElement('rb');
+      rb.textContent = substr.join('');
+      ruby.appendChild(rb);
+      const rt = document.createElement('rt');
+      rt.textContent = shouldShow
+        ? substr.map(char => lookup[char]).join(' ')
+        : '';
+      ruby.appendChild(rt);
+      remaining = stop === -1 ? [] : remaining.slice(stop, remaining.length);
+    }
+
+    return ruby;
+  };
+
+  const createRubyNodeTabular = (
+    text: string,
+    lookup: {[key: string]: string}
+  ) => {
     const ruby = document.createElement('ruby');
     ruby.className = 'pinyin-extension';
     const rts = [];
@@ -87,7 +117,7 @@
   const getTextNodesFromSelection = (selection: Selection) => {
     let commonAncestorContainer: Node = document.body;
 
-    if (selection.rangeCount > 0) {
+    if (!selection.isCollapsed) {
       const range = selection.getRangeAt(0);
       if (!range.collapsed) {
         commonAncestorContainer = range.commonAncestorContainer;
@@ -119,15 +149,23 @@
     return textNodes;
   };
 
-  const getCharactersFromTextNodes = (textNodes: Node[]): Set<string> => {
-    const characters = new Set<string>();
-    textNodes.forEach(node => {
-      for (const character of node.textContent!) {
-        if (isChinese(character)) {
-          characters.add(character);
+  const getCharactersFromTextNodes = (
+    textNodes: Node[],
+    selection: Selection
+  ): Set<string> => {
+    const characters = selection.isCollapsed
+      ? new Set<string>()
+      : new Set(Array.from(selection.toString()));
+    if (selection.isCollapsed) {
+      textNodes.forEach(node => {
+        for (const character of node.textContent!) {
+          if (isChinese(character)) {
+            characters.add(character);
+          }
         }
-      }
-    });
+      });
+    }
+
     return characters;
   };
 
@@ -136,12 +174,57 @@
     characterToPinyinMap: {[key: string]: string}
   ) => {
     console.time('annotateTextNodesWithPinyin');
+
+    const createRubyNode = navigator.vendor.match(/Apple/)
+      ? createRubyNodeInterspersed
+      : createRubyNodeTabular;
     for (const node of textNodes) {
-      const ruby = createRubyNode(node.nodeValue!, characterToPinyinMap);
-      node.parentElement!.replaceChild(ruby, node);
-      if (ruby.parentElement) {
-        ruby.parentElement.style.overflow = 'visible';
+      const frag = document.createDocumentFragment();
+      let remaining = node.nodeValue!;
+      while (remaining.length > 0) {
+        const leadingSpace = remaining.match(/^\s+/);
+        if (leadingSpace) {
+          frag.appendChild(document.createTextNode(leadingSpace[0]));
+          remaining = remaining.slice(leadingSpace[0].length);
+        } else {
+          const textMatch = remaining.match(/^[^\s]+/);
+          if (!textMatch) {
+            console.log('wtf');
+            break;
+          }
+          const textContent = textMatch[0];
+          const contentNeedingPinyin = Array.from(textContent).findIndex(c =>
+            needsPinyin(c, characterToPinyinMap)
+          );
+          if (contentNeedingPinyin === -1) {
+            frag.appendChild(document.createTextNode(textContent));
+            remaining = remaining.slice(textContent.length);
+          } else {
+            frag.appendChild(
+              document.createTextNode(
+                textContent.slice(0, contentNeedingPinyin)
+              )
+            );
+            const stop = Array.from(textContent).findIndex(
+              (c, i) =>
+                i > contentNeedingPinyin &&
+                !needsPinyin(c, characterToPinyinMap)
+            );
+            const stringToAnnotate =
+              stop === -1
+                ? textContent.slice(contentNeedingPinyin)
+                : textContent.slice(contentNeedingPinyin, stop);
+            frag.appendChild(
+              createRubyNode(stringToAnnotate, characterToPinyinMap)
+            );
+            remaining = remaining.slice(
+              contentNeedingPinyin + stringToAnnotate.length
+            );
+          }
+        }
       }
+      frag.normalize();
+      node.parentElement!.replaceChild(frag, node);
     }
     console.timeEnd('annotateTextNodesWithPinyin');
   };
@@ -167,8 +250,9 @@
 
   const refresh = async () => {
     cleanup();
-    const textNodes = getTextNodesFromSelection(window.getSelection()!);
-    const characters = getCharactersFromTextNodes(textNodes);
+    const selection = window.getSelection()!;
+    const textNodes = getTextNodesFromSelection(selection);
+    const characters = getCharactersFromTextNodes(textNodes, selection);
 
     const characterToPinyinMap = (await sendBackgroundMessage({
       request: 'lookup',

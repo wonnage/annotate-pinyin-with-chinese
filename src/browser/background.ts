@@ -4,13 +4,13 @@ let enabled: boolean | undefined;
 
 function buildOnclickHandler(isRemove: boolean) {
   return function onclick(info: chrome.contextMenus.OnClickData) {
-    chrome.storage.local.get('whitelist', items => {
+    chrome.storage.sync.get('whitelist', items => {
       const existingItems = new Set(items.whitelist || []);
       const words = info.selectionText?.split('') || [];
       words.forEach(w =>
         isRemove ? existingItems.delete(w) : existingItems.add(w)
       );
-      chrome.storage.local.set({whitelist: Array.from(existingItems)});
+      chrome.storage.sync.set({whitelist: Array.from(existingItems)});
       chrome.tabs.query({active: true, currentWindow: true}, tabs => {
         chrome.tabs.sendMessage(tabs[0]!.id!, {request: 'refresh'});
       });
@@ -101,7 +101,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.request === 'lookup') {
     const {characters} = message as {characters: string[]};
     console.log(characters.length);
-    chrome.storage.local.get(['hsk', 'whitelist'], items => {
+    chrome.storage.sync.get(['hsk', 'whitelist'], items => {
       const whitelist = new Set<string>(items?.whitelist || []);
       const level = items?.hsk
         ? parseInt(items.hsk, 10) || undefined
@@ -111,7 +111,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   } else if (message.request === 'updateContextMenu') {
-    chrome.storage.local.get('whitelist', items => {
+    chrome.storage.sync.get('whitelist', items => {
       const existingItems = new Set(items.whitelist || []);
       if (
         message.selection

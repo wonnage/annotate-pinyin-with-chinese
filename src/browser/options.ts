@@ -3,7 +3,7 @@ function saveOptions(e: Event) {
   const whitelistStr =
     (document.querySelector('#whitelist')! as HTMLTextAreaElement).value || '';
   const whitelist = whitelistStr.split(/[\s,]/);
-  chrome.storage.local.set({
+  chrome.storage.sync.set({
     hsk:
       (document.querySelector('#level')! as HTMLSelectElement).value ||
       'disabled',
@@ -23,7 +23,7 @@ function restoreOptions() {
     console.log(`Error: ${error}`);
   }
 
-  chrome.storage.local.get(['hsk', 'whitelist'], result => {
+  chrome.storage.sync.get(['hsk', 'whitelist'], result => {
     if (chrome.runtime.lastError) {
       onError(chrome.runtime.lastError);
     }
